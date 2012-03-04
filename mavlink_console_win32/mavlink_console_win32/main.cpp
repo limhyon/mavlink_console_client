@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <windows.h>
 
+/// MAVLink
+#include <common/mavlink.h>
+
 HANDLE hSerial;
 DCB dcbSerialParams = {0};
 COMMTIMEOUTS timeouts = {0};
