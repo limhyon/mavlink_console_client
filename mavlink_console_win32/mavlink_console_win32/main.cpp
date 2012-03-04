@@ -63,7 +63,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	dcbSerialParams.BaudRate = CBR_57600;
+	dcbSerialParams.BaudRate = CBR_115200;
 	dcbSerialParams.ByteSize = 8;
 	dcbSerialParams.StopBits = ONESTOPBIT;
 	dcbSerialParams.Parity = NOPARITY;
@@ -86,19 +86,98 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	unsigned char szBuff = 0;
+	uint8_t szBuff = 0;
 	DWORD dwBytesRead = 0;
+	DWORD dwBytesWritten = 0;
+
+	/// Mavlink
+	mavlink_status_t lastStatus;
+	lastStatus.packet_rx_drop_count = 0;
+
+	/// some flag
+	bool isLiveChecked = false;
+
+	/// System information
+	mavlink_system_t mavlink_system;
+	mavlink_system.sysid = 255;                   ///< ID 255
+	mavlink_system.compid = 0;     ///< The component sending the message is the IMU, it could be also a Linux process
+	
+	/// Sending buffer
+	mavlink_message_t sendMsg;
+	uint8_t sendBuf[MAVLINK_MAX_PACKET_LEN];
+	uint16_t len = 0;
 
 	while(run == true)
 	{
-		if(!ReadFile(hSerial,&szBuff,sizeof(szBuff),&dwBytesRead,NULL))
+		mavlink_message_t message;
+		mavlink_status_t status;
+		uint8_t msgReceived = false;
+
+		if(!ReadFile(hSerial,&szBuff,1,&dwBytesRead,NULL))
 		{
 			printf("Read error %d\n",GetLastError());
 			dwBytesRead = 0;
 		}
 		else
 		{
-			printf("%02X ", szBuff);
+			msgReceived = mavlink_parse_char(MAVLINK_COMM_0,szBuff,&message,&status);
+			//printf("%d ",szBuff);
+			//printf("%d bytes read\n",dwBytesRead);
+
+			//if(mavlink_parse_char(0,szBuff,&message,&status))
+			//{
+				//printf("Received message with ID %d, sequence: %d from component %d of system %d\n", message.msgid, message.seq, message.compid, message.sysid);
+			//}
+			
+			if (lastStatus.packet_rx_drop_count != status.packet_rx_drop_count)			
+			{
+				printf("ERROR: DROPPED %d PACKETS\n", status.packet_rx_drop_count);
+			}
+
+			lastStatus = status;
+		}
+
+		if(msgReceived)		
+		{
+			printf("Received message with ID %d, sequence: %d from component %d of system %d\n", message.msgid, message.seq, message.compid, message.sysid);
+
+			switch(message.msgid)
+			{
+				case MAVLINK_MSG_ID_HEARTBEAT:
+					if(isLiveChecked == false)
+					{
+						// Request data stream
+						mavlink_msg_request_data_stream_pack(mavlink_system.sysid, mavlink_system.compid,&sendMsg,message.sysid,message.compid,MAV_DATA_STREAM_RAW_SENSORS,10,1);
+
+						len = mavlink_msg_to_send_buffer(sendBuf,&sendMsg);
+
+						if(!WriteFile(hSerial,sendBuf,len,&dwBytesWritten,NULL))
+						{
+							printf("Send error : %d\n",GetLastError());
+						}
+						else
+						{
+							printf("Ask success %d/%d\n",len,dwBytesWritten);
+							//isLiveChecked = true;
+						}
+					}
+					printf("Heartbeat\n");
+					break;
+
+				case MAVLINK_MSG_ID_OPTICAL_FLOW:
+					printf("Optical flow!\n");
+					break;
+
+				case MAVLINK_MSG_ID_SYS_STATUS:
+					printf("[STATUS] mode:%d\n",mavlink_msg_sys_status_get_status(&message));
+					break;
+
+				default:
+					printf("Unknown message %d\n",message.msgid);
+					break;
+			}
+
+			msgReceived = false;
 		}
 	}
 
