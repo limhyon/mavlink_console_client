@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <windows.h>
+#include <conio.h>
+#include <time.h>
 
 /// MAVLink
 #include <common/mavlink.h>
@@ -9,10 +11,66 @@ DCB dcbSerialParams = {0};
 COMMTIMEOUTS timeouts = {0};
 bool run = true;
 
+class FlightData
+{
+public:
+	float roll;
+	float pitch;
+	float yaw;
+};
+
+/// Telemetry
+mavlink_optical_flow_t optical_flow;
+mavlink_state_correction_t state_error;
+FILE *fp;
+
+VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT_PTR idEvent,DWORD dwTime)
+{
+	/// Do your job.
+	static DWORD prevTime = 0;
+	//printf("dwTime : %d\n",dwTime-prevTime);
+	printf("errRoll=%2.2f,errPitch=%2.2f,Vx=%2.2f,Vy=%2.2f,Alt=%2.2f,dt=%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+	fprintf(fp,"%f\t%f\t%f\t%f\t%f\t%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+	prevTime = dwTime;
+}
+
+DWORD WINAPI ThreadProc(LPVOID lpParameter)
+{
+	UINT uiTimer = ::SetTimer(NULL, 12354, 80, TimerProc);
+
+	MSG msg;
+
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		/// Message pumping.
+		DispatchMessage(&msg);
+	}
+
+	KillTimer(NULL,uiTimer);
+
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	int portNum = -1;
 	char portArgBuf[6];
+	char fName[0xff];
+	srand ( time(NULL) );
+
+	sprintf_s(fName,"%d.txt",rand());
+
+	fp = fopen(fName,"w");
+
+	if(fp == NULL)
+	{
+		printf("Fopen failed!\n");
+		return -1;
+	}
+
+	/// Timer Thread function.
+	HANDLE hThread = ::CreateThread(NULL, NULL, ThreadProc, NULL, NULL, NULL);
+	CloseHandle(hThread);
 
 	if(argc < 2)
 	{
@@ -63,7 +121,8 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	dcbSerialParams.BaudRate = CBR_115200;
+	//dcbSerialParams.BaudRate = CBR_115200;
+	dcbSerialParams.BaudRate = CBR_57600;
 	dcbSerialParams.ByteSize = 8;
 	dcbSerialParams.StopBits = ONESTOPBIT;
 	dcbSerialParams.Parity = NOPARITY;
@@ -107,7 +166,9 @@ int main(int argc, char** argv)
 	uint8_t sendBuf[MAVLINK_MAX_PACKET_LEN];
 	uint16_t len = 0;
 
-	while(run == true)
+	printf("Open success.\n");
+
+	while(!_kbhit())
 	{
 		mavlink_message_t message;
 		mavlink_status_t status;
@@ -139,7 +200,7 @@ int main(int argc, char** argv)
 
 		if(msgReceived)		
 		{
-			printf("Received message with ID %d, sequence: %d from component %d of system %d\n", message.msgid, message.seq, message.compid, message.sysid);
+			//printf("Received message with ID %d, sequence: %d from component %d of system %d\n", message.msgid, message.seq, message.compid, message.sysid);
 
 			switch(message.msgid)
 			{
@@ -147,7 +208,8 @@ int main(int argc, char** argv)
 					if(isLiveChecked == false)
 					{
 						// Request data stream
-						mavlink_msg_request_data_stream_pack(mavlink_system.sysid, mavlink_system.compid,&sendMsg,message.sysid,message.compid,MAV_DATA_STREAM_RAW_SENSORS,10,1);
+						//mavlink_msg_request_data_stream_pack(mavlink_system.sysid, mavlink_system.compid,&sendMsg,message.sysid,message.compid,MAV_DATA_STREAM_RAW_SENSORS,10,1);
+						mavlink_msg_request_data_stream_pack(mavlink_system.sysid, mavlink_system.compid,&sendMsg,message.sysid,message.compid,MAV_DATA_STREAM_EXTRA3,50,1);
 
 						len = mavlink_msg_to_send_buffer(sendBuf,&sendMsg);
 
@@ -161,11 +223,16 @@ int main(int argc, char** argv)
 							//isLiveChecked = true;
 						}
 					}
-					printf("Heartbeat\n");
 					break;
 
 				case MAVLINK_MSG_ID_OPTICAL_FLOW:
-					printf("Optical flow!\n");
+					isLiveChecked = true;
+					mavlink_msg_optical_flow_decode(&message,&optical_flow);
+					break;
+
+				case MAVLINK_MSG_ID_STATE_CORRECTION:
+					isLiveChecked = true;
+					mavlink_msg_state_correction_decode(&message,&state_error);
 					break;
 
 				case MAVLINK_MSG_ID_SYS_STATUS:
@@ -182,6 +249,9 @@ int main(int argc, char** argv)
 	}
 
 	CloseHandle(hSerial);
+	fclose(fp);
+
+	printf("Terminated");
 
 	return 0;
 }
