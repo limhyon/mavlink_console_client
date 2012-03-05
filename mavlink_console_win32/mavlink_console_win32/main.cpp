@@ -6,10 +6,14 @@
 /// MAVLink
 #include <common/mavlink.h>
 
+/// VICON
+#include "vicon.h"
+
 HANDLE hSerial;
 DCB dcbSerialParams = {0};
 COMMTIMEOUTS timeouts = {0};
 bool run = true;
+bool isLiveChecked = false;
 
 class FlightData
 {
@@ -29,8 +33,17 @@ VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT_PTR idEvent,DWORD dwTime)
 	/// Do your job.
 	static DWORD prevTime = 0;
 	//printf("dwTime : %d\n",dwTime-prevTime);
-	printf("errRoll=%2.2f,errPitch=%2.2f,Vx=%2.2f,Vy=%2.2f,Alt=%2.2f,dt=%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
-	fprintf(fp,"%f\t%f\t%f\t%f\t%f\t%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+
+	if(isLiveChecked == true)
+	{
+		printf("[REC] errRoll=%2.2f,errPitch=%2.2f,Vx=%2.2f,Vy=%2.2f,Alt=%2.2f,dt=%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+		fprintf(fp,"%f\t%f\t%f\t%f\t%f\t%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+	}
+	else
+	{
+		printf("errRoll=%2.2f,errPitch=%2.2f,Vx=%2.2f,Vy=%2.2f,Alt=%2.2f,dt=%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+	}
+
 	prevTime = dwTime;
 }
 
@@ -56,9 +69,14 @@ int main(int argc, char** argv)
 	int portNum = -1;
 	char portArgBuf[6];
 	char fName[0xff];
+
+	/// Connect VICON
+	initialize_VICON();
+
+
 	srand ( time(NULL) );
 
-	sprintf_s(fName,"%d.txt",rand());
+	sprintf_s(fName,"data-%d.txt",rand());
 
 	fp = fopen(fName,"w");
 
@@ -152,9 +170,6 @@ int main(int argc, char** argv)
 	/// Mavlink
 	mavlink_status_t lastStatus;
 	lastStatus.packet_rx_drop_count = 0;
-
-	/// some flag
-	bool isLiveChecked = false;
 
 	/// System information
 	mavlink_system_t mavlink_system;
