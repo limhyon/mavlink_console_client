@@ -28,20 +28,25 @@ mavlink_optical_flow_t optical_flow;
 mavlink_state_correction_t state_error;
 FILE *fp;
 
+extern double xA,yA,zA;
+extern double xA_dot,yA_dot,zA_dot;
+
 VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT_PTR idEvent,DWORD dwTime)
 {
 	/// Do your job.
 	static DWORD prevTime = 0;
 	//printf("dwTime : %d\n",dwTime-prevTime);
+	retrieve_VICON();
 
 	if(isLiveChecked == true)
 	{
 		printf("[REC] errRoll=%2.2f,errPitch=%2.2f,Vx=%2.2f,Vy=%2.2f,Alt=%2.2f,dt=%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
-		fprintf(fp,"%f\t%f\t%f\t%f\t%f\t%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+		fprintf(fp,"%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0,xA_dot,yA_dot,zA_dot,xA,yA,zA);
 	}
 	else
 	{
-		printf("errRoll=%2.2f,errPitch=%2.2f,Vx=%2.2f,Vy=%2.2f,Alt=%2.2f,dt=%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+		//printf("errRoll=%2.2f,errPitch=%2.2f,Vx=%2.2f,Vy=%2.2f,Alt=%2.2f,dt=%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
+		view_data();
 	}
 
 	prevTime = dwTime;
@@ -49,7 +54,7 @@ VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT_PTR idEvent,DWORD dwTime)
 
 DWORD WINAPI ThreadProc(LPVOID lpParameter)
 {
-	UINT uiTimer = ::SetTimer(NULL, 12354, 80, TimerProc);
+	UINT uiTimer = ::SetTimer(NULL, 12354, 10, TimerProc);
 
 	MSG msg;
 
@@ -265,6 +270,8 @@ int main(int argc, char** argv)
 
 	CloseHandle(hSerial);
 	fclose(fp);
+
+	printf("File closed\n");
 
 	printf("Terminated");
 
