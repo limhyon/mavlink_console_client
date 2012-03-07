@@ -41,7 +41,7 @@ VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT_PTR idEvent,DWORD dwTime)
 	if(isLiveChecked == true)
 	{
 		printf("[REC] errRoll=%2.2f,errPitch=%2.2f,Vx=%2.2f,Vy=%2.2f,Alt=%2.2f,dt=%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0);
-		fprintf(fp,"%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,optical_flow.time/1000000.0,xA_dot,yA_dot,zA_dot,xA,yA,zA);
+		fprintf(fp,"%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",state_error.rollErr,state_error.pitchErr,state_error.vxErr,state_error.vyErr,optical_flow.ground_distance,xA_dot,yA_dot,zA_dot,xA,yA,zA,optical_flow.quality,optical_flow.time/1000000.0);
 	}
 	else
 	{
